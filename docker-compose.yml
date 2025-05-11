@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - API_IP=${API_IP}
+    ports:
+      - "443:443"   # HTTPS
+      - "80:80"     # HTTP (for redirect to HTTPS)
+    networks:
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      - API_IP=${API_IP}
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "4000:4000"
+    networks:
+      - app-network
+    environment:
+      - PORT=${PORT}
+      - DB_PATH=${DB_PATH}
+      - BCRYPT_SALT_ROUNDS=${BCRYPT_SALT_ROUNDS}
+    # volumes:
+    #   - /goinfre:/goinfre # Uncomment this at school to map /goinfre or /sgoinfre as required by the subject (Page 6)
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge

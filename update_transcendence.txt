@@ -1,0 +1,38 @@
+Résumé ft_transcendence
+
+- Structure du projet
+  J’ai organisé les dossiers avec :
+
+  - backend/ : Pour le serveur (avec 'Dockerfile', 'package.json', et 'index.js' pour démarrer)
+  - frontend  : Pour l’interface (avec 'index.html', 'game.ts', 'tournament.ts', 'style.css', etc.)
+  - Des images dans 'public/assets/' (comme 'background.png', 'flower.png')
+
+- Docker
+  J’ai fait un 'docker-compose.yml' qui lance :
+
+  - Le frontend sur le port 5173 (avec 'npm run dev')
+  - Le backend sur le port 3000 (avec 'npm start')
+    Ça permet de tout lancer facilement sur n’importe quelle machine
+
+- Backend
+  J’ai mis en place un serveur Node.js de base dans 'index.js'.
+  C’est prêt pour ajouter des routes et des trucs comme la gestion
+  des utilisateurs ou des tournois.
+
+- Frontend
+  J’ai configuré le frontend avec TypeScript, Vite, et Tailwind CSS pour les styles. Y a déjà des fichiers pour :
+
+  - Le jeu ('game.ts')
+  - Les tournois ('tournament.ts')
+  - La navigation ('router.ts')
+  - L’interface ('ui.ts')
+
+
+Questions :
+ - Pour l'instant le nombre de joueurs pour un tournament est de 4 obligatoirement,
+ est ce que c'est ok pour vous? (ou bien ajouter la possibilite d'en avoir 
+ plus ou moins?)
+
+ Notes :
+  - Les "erreurs" dans VScode sont normales, c'est juste que le module uuid n'est
+  pas installé en local, seulement dans l'environnement Docker
