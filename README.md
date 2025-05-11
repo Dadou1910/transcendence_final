@@ -5,20 +5,37 @@
 
 ## ✅ Fonctionnalités obligatoires
 
-- [x] 🎯 **SPA (Single Page Application)** avec TailwindCSS + TypeScript
-- [x] 🕹️ **Pong local** (2 joueurs sur le même clavier)
+- [x] 🎯 **SPA (Single Page Application)**
+- [x] 🕹️ **Pong local**
 - [x] 🧩 **Tournoi avec matchmaking**
 - [x] 🧑‍🎤 **Alias joueur unique par tournoi**
 - [x] 🐳 **Lancement via une seule commande Docker**
 - [x] 🔒 **Connexion HTTPS + mots de passe hashés**
-- [ ] 🛡️ **Protection contre les attaques XSS/SQLi + validation des entrées**
+- [x] 🛡️ **Protection contre les attaques XSS/SQLi + validation des entrées**
 - [x] 🧪 **Aucune erreur JS dans Firefox dernière version**
 
 
 # Core Technical Requirements Documentation
 
 ## Overview
-The Transcendence project implements a secure, containerized web application with a focus on real-time multiplayer gaming, tournament management, and robust security measures. The implementation follows strict technical requirements while maintaining flexibility for module-specific enhancements.
+Steps before you can start the docker on you local machine : 
+- copy/paste the .env at root of repository
+- create a ssl folder and copy/paste the cert.pem and key.pem
+- in .env, API_IP should be set to your Wi-Fi ip address :
+```
+ip addr show (cmd in terminal)
+
+wlp0s20f3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether 58:6c:25:7f:73:ad brd ff:ff:ff:ff:ff:ff
+    inet 192.168.1.184 (choose the wlp0s20f3)
+
+```
+- Now you can start the docker containers
+
+```bash
+docker-compose up --build
+```
+
 
 ## Core Architecture
 
@@ -3405,14 +3422,6 @@ const schema = {
 
 ---
 
-
-
-
-## Lancement
-
-```bash
-docker-compose up --build
-```
 
 
 
