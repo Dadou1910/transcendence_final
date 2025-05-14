@@ -14,7 +14,7 @@
 #speedSlider {
   -webkit-appearance: none;
   appearance: none;
-  width: clamp(150px, 15vw, 200px);
+  width: clamp(150px, 15vw, 160px);
   height: clamp(8px, 0.8vw, 12px);
   background: #f4c2c2;
   border-radius: clamp(4px, 0.5vw, 6px);
@@ -137,8 +137,14 @@ body {
 .player-name {
   font-size: 1.2rem;
   color: #666;
-  min-width: 120px;
+  min-width: 60px;
+  max-width: 120px;
   text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+  flex-basis: 0;
 }
 
 .controls-group {

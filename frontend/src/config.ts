@@ -1,33 +1,24 @@
 // Get API IP from environment variable or fallback to current hostname
 const getApiIp = () => {
-  // @ts-ignore - This will be replaced during build
-  const apiIp = process.env.API_IP;
-  const finalIp = apiIp || window.location.hostname;
-  
-  // Create a persistent check in the browser console
-  console.log('%c🔍 API Configuration Check', 'font-size: 16px; font-weight: bold; color: #4CAF50;');
-  console.log('%cAPI IP:', 'font-weight: bold;', finalIp);
-  console.log('%cBackend URL:', 'font-weight: bold;', `${window.location.protocol}//${finalIp}:4000`);
-  console.log('%cWebSocket URL:', 'font-weight: bold;', `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${finalIp}:4000`);
-  console.log('%cIf you see "localhost" above, the API_IP injection failed!', 'color: #f44336; font-weight: bold;');
-  
-  return finalIp;
+  // This function is no longer needed as we use relative paths for the backend.
+  // Keeping it for now in case it's used elsewhere, but it should be reviewed.
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    return window.location.hostname;
+  }
+  // For other environments, you might want to return a specific internal IP or leave it empty
+  // if Nginx is on the same host and proxies based on path.
+  // For this change, we assume Nginx is on the same host.
+  return window.location.hostname; 
 };
 
-// Configuration for the application
+// Base URL for backend API calls - now a relative path for Nginx proxying
 export const getBackendUrl = () => {
-  const hostname = getApiIp();
-  const protocol = window.location.protocol;
-  const port = '4000'; // Backend port
-  
-  return `${protocol}//${hostname}:${port}`;
+  return '/api'; // Nginx will proxy /api requests to the backend
 };
 
-// WebSocket URL helper
+// URL for WebSocket connections - now relative for Nginx proxying
 export const getWebSocketUrl = (path: string) => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const hostname = getApiIp();
-  const port = '4000';
-  
-  return `${protocol}//${hostname}:${port}${path}`;
+  const host = window.location.host; // e.g., localhost:3000 or yourdomain.com
+  return `${protocol}//${host}${path}`; // path should start with /ws/
 }; 

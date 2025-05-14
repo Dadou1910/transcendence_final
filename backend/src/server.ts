@@ -13,30 +13,14 @@ import { matchmakingRoutes } from './routes/matchmaking.js';
 import { sessionMiddleware } from './routes/middleware.js';
 import { wsRoutes } from './routes/ws.js';
 import { avatarRoutes } from './routes/avatar.js';
-import fs from 'fs';
-import path from 'path';
 import { Database } from 'sqlite3';
 
 async function buildServer() {
   const fastify: FastifyInstance = Fastify({ 
-    logger: true,
-    https: {
-      key: fs.readFileSync(path.join(__dirname, '../certs/key.pem')),
-      cert: fs.readFileSync(path.join(__dirname, '../certs/cert.pem'))
-    }
+    logger: true
   });
 
   await fastify.register(fastifyEnv);
-
-  // Create HTTP server for redirection if HTTPS_ONLY is true
-  if (fastify.config.HTTPS_ONLY) {
-    const httpServer = Fastify({ logger: true });
-    httpServer.all('/*', async (request: FastifyRequest, reply: FastifyReply) => {
-      const httpsUrl = `https://${request.hostname}${request.url}`;
-      reply.redirect(301, httpsUrl);
-    });
-    await httpServer.listen({ port: 80, host: '0.0.0.0' });
-  }
 
   await fastify.register(cors, { 
     origin: true,
@@ -81,7 +65,7 @@ async function buildServer() {
 
   const port = fastify.config.PORT;
   await fastify.listen({ port, host: '0.0.0.0' });
-  fastify.log.info(`Server listening on ${port}`);
+  fastify.log.info(`Server listening on http://0.0.0.0:${port}`);
 }
 
 buildServer().catch((err) => {

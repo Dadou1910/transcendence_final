@@ -7,9 +7,6 @@ export interface Env {
   PORT: number
   DB_PATH: string
   BCRYPT_SALT_ROUNDS: number
-  SSL_CERT_PATH: string
-  SSL_KEY_PATH: string
-  HTTPS_ONLY: boolean
 }
 
 // Extend FastifyInstance with our config
@@ -34,18 +31,6 @@ const schema = {
     BCRYPT_SALT_ROUNDS: { 
       type: 'number',
       default: 10 // Default for bcrypt hashing
-    },
-    SSL_CERT_PATH: {
-      type: 'string',
-      default: '/app/certs/cert.pem'
-    },
-    SSL_KEY_PATH: {
-      type: 'string',
-      default: '/app/certs/key.pem'
-    },
-    HTTPS_ONLY: {
-      type: 'boolean',
-      default: true
     }
   }
 }

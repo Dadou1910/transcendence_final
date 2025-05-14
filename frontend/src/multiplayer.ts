@@ -126,28 +126,21 @@ export class MultiplayerPongGame {
         e.preventDefault();
         if (e.touches.length > 0) {
           const rect = this.canvas.getBoundingClientRect();
-          const touchX = e.touches[0].clientX - rect.left;
           const touchY = e.touches[0].clientY - rect.top;
-          // Left half controls left paddle, right half controls right paddle
-          if (touchX < this.canvas.width / 2) {
-            // Move left paddle (host or guest)
-            this.paddleLeftY = Math.max(0, Math.min(this.baseHeight - 80, touchY - 40));
-            // Send paddle move to host if guest
-            if (!this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN) {
-              if (lastTouchY !== null) {
-                const direction = touchY < lastTouchY ? 'w' : 's';
-                this.ws.send(JSON.stringify({ type: 'paddle', key: direction, pressed: true }));
-              }
+          // For the guest, always send right paddle movement regardless of touch position
+          if (!this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN) {
+            if (lastTouchY !== null) {
+              const direction = touchY < lastTouchY ? 'ArrowUp' : 'ArrowDown';
+              this.ws.send(JSON.stringify({ type: 'paddle', key: direction, pressed: true }));
             }
-          } else {
-            // Move right paddle (host or guest)
-            this.paddleRightY = Math.max(0, Math.min(this.baseHeight - 80, touchY - 40));
-            // Send paddle move to host if guest
-            if (!this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN) {
-              if (lastTouchY !== null) {
-                const direction = touchY < lastTouchY ? 'ArrowUp' : 'ArrowDown';
-                this.ws.send(JSON.stringify({ type: 'paddle', key: direction, pressed: true }));
-              }
+          }
+          // Only the host updates paddle positions locally
+          if (this.isHost) {
+            const touchX = e.touches[0].clientX - rect.left;
+            if (touchX < this.canvas.width / 2) {
+              this.paddleLeftY = Math.max(0, Math.min(this.baseHeight - 80, touchY - 40));
+            } else {
+              this.paddleRightY = Math.max(0, Math.min(this.baseHeight - 80, touchY - 40));
             }
           }
           lastTouchY = touchY;
@@ -161,6 +154,15 @@ export class MultiplayerPongGame {
   }
 
   public handleWebSocketMessage(data: any): void {
+    if (data.type === 'paddle') {
+      // Only the host should process guest paddle movement
+      if (this.isHost) {
+        // Guest should only control the right paddle (ArrowUp/ArrowDown)
+        if (data.key === 'ArrowUp' && this.paddleRightY > 0) this.paddleRightY -= this.paddleSpeed;
+        if (data.key === 'ArrowDown' && this.paddleRightY < this.baseHeight - 80) this.paddleRightY += this.paddleSpeed;
+        // Ignore 'w' and 's' from guest
+      }
+    }
     switch (data.type) {
       case "opponent":
         // Update opponent name when they join
@@ -190,9 +192,6 @@ export class MultiplayerPongGame {
         this.ballSpeedY = 4.1;
         this.restartButton.style.display = "none";
         this.pollForGameStart();
-        break;
-      case "paddle":
-        this.handlePaddleMessage(data);
         break;
       case "state":
         this.handleStateMessage(data);
@@ -350,22 +349,7 @@ export class MultiplayerPongGame {
     }
   }
 
-  // Host: handle paddle input from guest
-  public handlePaddleMessage(msg: any) {
-    if (this.isHost && msg.type === "paddle") {
-      // Host only processes ArrowUp/ArrowDown from guest
-      if (["ArrowUp", "ArrowDown"].includes(msg.key)) {
-        this.keys[msg.key as "ArrowUp" | "ArrowDown"] = msg.pressed;
-      }
-    } else if (!this.isHost && msg.type === "paddle") {
-      // Guest only processes W/S from host
-      if (["w", "s"].includes(msg.key)) {
-        this.keys[msg.key as "w" | "s"] = msg.pressed;
-      }
-    }
-  }
-
-  // Guest: handle state updates from host
+  // Host: handle state updates from guest
   public handleStateMessage(msg: any) {
     if (!this.isHost && msg.type === "state") {
       Object.assign(this, msg.state);
@@ -596,7 +580,6 @@ export class MultiplayerPongGame {
     if (backButton) {
       backButton.style.display = "block";
       backButton.onclick = () => {
-
         this.cleanup();
         this.navigate("/");
       };
@@ -608,7 +591,7 @@ export class MultiplayerPongGame {
     if (this.ws) {
       this.ws.send(JSON.stringify({ type: "cleanup", reason: "opponent_left"}));
     }
-    if (this.ws) {
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       this.ws.close();
     }
     window.removeEventListener("resize", () => this.resizeCanvas());
