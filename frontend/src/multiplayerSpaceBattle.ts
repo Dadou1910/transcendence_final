@@ -279,6 +279,27 @@ export class MultiplayerSpaceBattle {
       this.gameStarted = msg.state.gameStarted;
       this.draw(performance.now());
     }
+    if (!this.isHost && msg.type === 'updateBackgroundColor' && this.backgroundColorSelect) {
+      this.backgroundColor = msg.color;
+      this.backgroundColorSelect.value = msg.color;
+      // Guest saves setting upon confirmation from host
+      if (this.userEmail) {
+        this.statsManager.setUserSettings(this.userEmail, { backgroundColor: msg.color });
+      }
+    }
+  }
+
+  // New method for Host to handle direct commands like color change requests
+  public handleDirectMessage(data: any): void {
+    if (this.isHost && data.type === 'requestBackgroundColorChange' && this.ws && this.ws.readyState === WebSocket.OPEN && this.backgroundColorSelect) {
+      this.backgroundColor = data.color;
+      this.backgroundColorSelect.value = data.color;
+      this.ws.send(JSON.stringify({ type: 'updateBackgroundColor', color: data.color }));
+      // Host saves setting
+      if (this.userEmail) {
+        this.statsManager.setUserSettings(this.userEmail, { backgroundColor: data.color });
+      }
+    }
   }
 
   // Call this after assignment to ensure the game loop starts when gameStarted is set to true
@@ -615,13 +636,36 @@ export class MultiplayerSpaceBattle {
       }
     });
 
+    // Prevent arrow keys from controlling the speed slider when it's focused
+    this.speedSlider.addEventListener("keydown", (event) => {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+        event.preventDefault();
+      }
+    });
+
     // Background color selector
     if (this.backgroundColorSelect) {
       this.backgroundColor = this.backgroundColorSelect.value || "#d8a8b5";
       this.backgroundColorSelect.addEventListener("change", (e) => {
-        this.backgroundColor = (e.target as HTMLSelectElement).value;
-        if (this.userEmail) {
-          this.statsManager.setUserSettings(this.userEmail, { backgroundColor: this.backgroundColor });
+        const newColorValue = (e.target as HTMLSelectElement).value;
+        if (this.isHost) {
+          // Host updates locally and sends to guest
+          this.backgroundColor = newColorValue;
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'updateBackgroundColor', color: newColorValue }));
+          }
+          if (this.userEmail) {
+            this.statsManager.setUserSettings(this.userEmail, { backgroundColor: newColorValue });
+          }
+        } else {
+          // Guest sends request to host
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'requestBackgroundColorChange', color: newColorValue }));
+          }
+          // Guest can also save their preferred setting locally
+          if (this.userEmail) {
+            this.statsManager.setUserSettings(this.userEmail, { backgroundColor: newColorValue });
+          }
         }
       });
     }

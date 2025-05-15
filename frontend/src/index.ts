@@ -1214,8 +1214,33 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
       // Forward all messages to the game instance if it has handleWebSocketMessage
       if (multiplayerGame && typeof multiplayerGame.handleWebSocketMessage === "function") {
         multiplayerGame.handleWebSocketMessage(data);
-        return; // Prevent further game-specific logic
+        // For MultiplayerPongGame, handleWebSocketMessage covers all necessary messages.
+        // For MultiplayerSpaceBattle, we might need to handle some messages here or ensure they are passed correctly.
+        if (multiplayerGameType === "pong") {
+          return; // Pong game handles everything internally
+        }
       }
+
+      // Specific handling for MultiplayerSpaceBattle or messages not covered by a generic handler
+      if (multiplayerGameType === "spaceBattle" && multiplayerGame) {
+        if (data.type === 'state' || data.type === 'updateBackgroundColor') { // Guest updates
+          if (typeof multiplayerGame.handleStateMessage === 'function') {
+            multiplayerGame.handleStateMessage(data);
+          }
+        } else if (data.type === 'paddle') { // Host receives paddle input
+          if (typeof multiplayerGame.handlePaddleMessage === 'function') {
+            multiplayerGame.handlePaddleMessage(data);
+          }
+        } else if (data.type === 'requestBackgroundColorChange') { // Host receives color change request
+          if (typeof multiplayerGame.handleDirectMessage === 'function') {
+            multiplayerGame.handleDirectMessage(data);
+          }
+        } else if (data.type === 'assign' || data.type === 'opponent' || data.type === 'game_start' || data.type === 'gameOver') {
+           // These are general messages also handled below, but can be pre-processed by space battle if needed.
+           // For now, let them fall through to the generic handling after this block.
+        }
+      }
+
       if (data.type === "cleanup") {
         if (data.reason === "opponent_left") {
           alert(i18next.t('game.opponentLeft'));

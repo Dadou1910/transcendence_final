@@ -156,11 +156,14 @@ export class MultiplayerPongGame {
   public handleWebSocketMessage(data: any): void {
     if (data.type === 'paddle') {
       // Only the host should process guest paddle movement
-      if (this.isHost) {
-        // Guest should only control the right paddle (ArrowUp/ArrowDown)
-        if (data.key === 'ArrowUp' && this.paddleRightY > 0) this.paddleRightY -= this.paddleSpeed;
-        if (data.key === 'ArrowDown' && this.paddleRightY < this.baseHeight - 80) this.paddleRightY += this.paddleSpeed;
-        // Ignore 'w' and 's' from guest
+      if (this.isHost && data.player === 'guest') {
+        // Update the host's internal representation of the guest's key state
+        if (data.key === 'ArrowUp') {
+          this.keys.ArrowUp = data.pressed;
+        } else if (data.key === 'ArrowDown') {
+          this.keys.ArrowDown = data.pressed;
+        }
+        // The actual paddle movement based on this.keys will happen in this.updateGameState()
       }
     }
     switch (data.type) {
@@ -186,10 +189,10 @@ export class MultiplayerPongGame {
         this.scoreRightElement.textContent = "0";
         this.paddleLeftY = 160;
         this.paddleRightY = 160;
-        this.ballX = 400;
-        this.ballY = 200;
-        this.ballSpeedX = 6.0;
-        this.ballSpeedY = 4.1;
+        // Reset ball speed according to the current slider value at game start
+        const speedMultiplier = this.getSpeedMultiplier();
+        this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+        this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
         this.restartButton.style.display = "none";
         this.pollForGameStart();
         break;
@@ -206,6 +209,52 @@ export class MultiplayerPongGame {
         // Only close the WebSocket, do not call cleanup or navigate
         if (this.ws) {
           this.ws.close();
+        }
+        break;
+      case 'requestSpeedChange': // New case for host
+        if (this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.speedSlider.value = data.value;
+          const newSpeedMultiplier = this.getSpeedMultiplier();
+          this.ballSpeedX = this.baseBallSpeedX * this.scale * newSpeedMultiplier * Math.sign(this.ballSpeedX || (Math.random() > 0.5 ? 1 : -1));
+          this.ballSpeedY = this.baseBallSpeedY * this.scale * newSpeedMultiplier * Math.sign(this.ballSpeedY || (Math.random() > 0.5 ? 1 : -1));
+          // Notify guest of the confirmed speed change
+          this.ws.send(JSON.stringify({ type: 'updateSpeed', value: this.speedSlider.value }));
+          // Persist setting for the host
+          if (this.userName) {
+            this.statsManager.setUserSettings(this.userName, { ballSpeed: parseInt(this.speedSlider.value) });
+          }
+        }
+        break;
+      case 'updateSpeed': // New case for guest
+        if (!this.isHost) {
+          this.speedSlider.value = data.value;
+          const newSpeedMultiplier = this.getSpeedMultiplier();
+          // Ensure ballSpeedX/Y have a direction if they were 0 (e.g. after gameOver)
+          this.ballSpeedX = this.baseBallSpeedX * this.scale * newSpeedMultiplier * Math.sign(this.ballSpeedX || (Math.random() > 0.5 ? 1 : -1));
+          this.ballSpeedY = this.baseBallSpeedY * this.scale * newSpeedMultiplier * Math.sign(this.ballSpeedY || (Math.random() > 0.5 ? 1 : -1));
+          // Persist setting for the guest
+           if (this.userName) { // Assuming guest also has a userName to save settings
+            this.statsManager.setUserSettings(this.userName, { ballSpeed: parseInt(this.speedSlider.value) });
+          }
+        }
+        break;
+      case 'requestBackgroundColorChange': // For Host
+        if (this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN && this.backgroundColorSelect) {
+          this.backgroundColor = data.color;
+          this.backgroundColorSelect.value = data.color;
+          this.ws.send(JSON.stringify({ type: 'updateBackgroundColor', color: data.color }));
+          if (this.userName) {
+            this.statsManager.setUserSettings(this.userName, { backgroundColor: data.color });
+          }
+        }
+        break;
+      case 'updateBackgroundColor': // For Guest
+        if (!this.isHost && this.backgroundColorSelect) {
+          this.backgroundColor = data.color;
+          this.backgroundColorSelect.value = data.color;
+          if (this.userName) {
+            this.statsManager.setUserSettings(this.userName, { backgroundColor: data.color });
+          }
         }
         break;
     }
@@ -235,6 +284,67 @@ export class MultiplayerPongGame {
         const leftNameElem = document.getElementById("playerLeftNameDisplay");
         if (leftNameElem) leftNameElem.textContent = opponentName;
       }
+    }
+
+    // Speed Slider event listener
+    this.speedSlider.addEventListener("input", () => {
+      const newSliderValue = this.speedSlider.value;
+      if (this.isHost) {
+        // Host updates locally and sends to guest
+        const speedMultiplier = parseFloat(newSliderValue) / 5;
+        this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier * Math.sign(this.ballSpeedX || (Math.random() > 0.5 ? 1 : -1));
+        this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * Math.sign(this.ballSpeedY || (Math.random() > 0.5 ? 1 : -1));
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ type: 'updateSpeed', value: newSliderValue }));
+        }
+        if (this.userName) {
+          this.statsManager.setUserSettings(this.userName, { ballSpeed: parseInt(newSliderValue) });
+        }
+      } else {
+        // Guest sends request to host
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ type: 'requestSpeedChange', value: newSliderValue }));
+        }
+        // Guest can also save their preferred setting locally, host will confirm authoritative speed
+        if (this.userName) {
+            this.statsManager.setUserSettings(this.userName, { ballSpeed: parseInt(newSliderValue) });
+        }
+      }
+    });
+
+    // Prevent arrow keys from controlling the speed slider when it's focused
+    this.speedSlider.addEventListener("keydown", (event) => {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+        event.preventDefault();
+      }
+    });
+
+    // Background Color Selector event listener
+    if (this.backgroundColorSelect) {
+      // Set initial background color from select or default
+      this.backgroundColor = this.backgroundColorSelect.value || "#d8a8b5";
+      this.backgroundColorSelect.addEventListener("change", () => {
+        const newColorValue = (this.backgroundColorSelect as HTMLSelectElement).value;
+        if (this.isHost) {
+          // Host updates locally and sends to guest
+          this.backgroundColor = newColorValue;
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'updateBackgroundColor', color: newColorValue }));
+          }
+          if (this.userName) {
+            this.statsManager.setUserSettings(this.userName, { backgroundColor: newColorValue });
+          }
+        } else {
+          // Guest sends request to host
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'requestBackgroundColorChange', color: newColorValue }));
+          }
+          // Guest can also save their preferred setting locally
+          if (this.userName) {
+            this.statsManager.setUserSettings(this.userName, { backgroundColor: newColorValue });
+          }
+        }
+      });
     }
 
     // Start/Restart button
@@ -269,8 +379,11 @@ export class MultiplayerPongGame {
         }
       } else {
         // Guest only controls right paddle with ArrowUp/ArrowDown
+        // Send input to host, do not update local keys state
         if (["ArrowUp", "ArrowDown"].includes(e.key)) {
-          this.keys[e.key as "ArrowUp" | "ArrowDown"] = true;
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'paddle', key: e.key, pressed: true, player: 'guest' }));
+          }
         }
       }
     });
@@ -283,8 +396,11 @@ export class MultiplayerPongGame {
         }
       } else {
         // Guest only controls right paddle with ArrowUp/ArrowDown
+        // Send input to host, do not update local keys state
         if (["ArrowUp", "ArrowDown"].includes(e.key)) {
-          this.keys[e.key as "ArrowUp" | "ArrowDown"] = false;
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'paddle', key: e.key, pressed: false, player: 'guest' }));
+          }
         }
       }
     });
@@ -347,6 +463,11 @@ export class MultiplayerPongGame {
       this.hasTriggeredGameEnd = true;
       this.onGameEnd(winnerName);
     }
+
+    // Cleanup after a few seconds
+    setTimeout(() => {
+      this.cleanup();
+    }, 5000); // 5 seconds delay
   }
 
   // Host: handle state updates from guest
