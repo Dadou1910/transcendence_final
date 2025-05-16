@@ -738,27 +738,16 @@ export function renderTournamentEnd(winnerName: string): string {
 
 // Sets up event listeners for the tournament end screen buttons
 export function setupTournamentEnd(onStartAgain: () => void, onBack: () => void) {
-  const startAgainButton = document.getElementById("startAgainButton") as HTMLButtonElement;
-  const backButton = document.getElementById("backButton") as HTMLButtonElement;
-
-  // Attach start again button listener
-  if (startAgainButton) {
-    startAgainButton.addEventListener("click", (e) => {
-      e.preventDefault();
-      onStartAgain();
-    });
-  } else {
-    console.error("Start Again button not found!");
-  }
+  const backToMenuButton = document.getElementById("backToMenuButton") as HTMLButtonElement;
 
   // Attach back button listener
-  if (backButton) {
-    backButton.addEventListener("click", (e) => {
+  if (backToMenuButton) {
+    backToMenuButton.addEventListener("click", (e) => {
       e.preventDefault();
       onBack();
     });
   } else {
-    console.error("Back button not found!");
+    console.error("Back to Menu button not found!");
   }
 }
 
