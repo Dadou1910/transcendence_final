@@ -21,7 +21,7 @@ COPY . .
 RUN npm run build
 
 # Expose port
-EXPOSE 80 443
+EXPOSE 443
 
 # Command to start the server
 CMD ["npm", "start"]

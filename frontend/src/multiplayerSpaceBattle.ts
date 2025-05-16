@@ -717,13 +717,13 @@ export class MultiplayerSpaceBattle {
 
     // Keyboard controls (movement only)
     document.addEventListener("keydown", (e) => {
-      if (e.key === " " && this.gameStarted) {
-        this.isPaused = !this.isPaused;
-      }
       if (["a", "d", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         // Host can only use A/D keys
         if (this.isHost && (e.key === "a" || e.key === "d")) {
           this.keys[e.key as "a" | "d" | "ArrowLeft" | "ArrowRight"] = true;
+          if (this.ws) {
+            this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: true }));
+          }
         }
         // Guest can only use ArrowLeft/ArrowRight keys
         else if (!this.isHost && (e.key === "ArrowLeft" || e.key === "ArrowRight") && !this.gameOver) {
@@ -739,6 +739,9 @@ export class MultiplayerSpaceBattle {
         // Host can only use A/D keys
         if (this.isHost && (e.key === "a" || e.key === "d")) {
           this.keys[e.key as "a" | "d" | "ArrowLeft" | "ArrowRight"] = false;
+          if (this.ws) {
+            this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: false }));
+          }
         }
         // Guest can only use ArrowLeft/ArrowRight keys
         else if (!this.isHost && (e.key === "ArrowLeft" || e.key === "ArrowRight") && !this.gameOver) {
