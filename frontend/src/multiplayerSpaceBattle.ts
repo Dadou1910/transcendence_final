@@ -80,8 +80,6 @@ export class MultiplayerSpaceBattle {
   };
   public gameLoopRunning: boolean = false;
   public spaceshipSpeed: number | null = null;
-  private lastKeyEventTime: number = 0;
-  private readonly KEY_RESET_INTERVAL: number = 100; // Reset keys if no events for 100ms
 
   constructor(
     playerLeftName: string,
@@ -177,38 +175,27 @@ export class MultiplayerSpaceBattle {
           const touchY = e.touches[0].clientY - rect.top;
           
           if (this.isHost) {
-            // Host can only move their own (left) spaceship horizontally at the bottom
+            // Host can only move their own (left) spaceship
             if (touchX < this.canvas.width / 2) {
               // Calculate relative movement
               const deltaX = touchX - (lastTouchX || touchX);
-              // Only update x, y is fixed at the initial spawn position
-              this.leftSpaceship.x = Math.max(
-                this.leftSpaceship.width / 2,
-                Math.min(this.canvas.width / 2 - this.leftSpaceship.width / 2, 
-                  this.leftSpaceship.x + deltaX * 0.5)
-              );
-              this.leftSpaceship.y = (this.baseHeight - 30) * this.scale;
+              // Update key state based on movement direction
+              this.keys.a = deltaX < 0;
+              this.keys.d = deltaX > 0;
             }
-            // Do nothing for right half (host cannot move right spaceship)
           } else {
-            // Guest can only send input for their own spaceship (right side)
+            // Guest can only move their own (right) spaceship
             if (touchX >= this.canvas.width / 2) {
               if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                if (lastTouchX !== null) {
-                  // Calculate relative movement
-                  const deltaX = touchX - lastTouchX;
-                  // Send movement direction based on relative movement
-                  const direction = deltaX < 0 ? 'ArrowLeft' : 'ArrowRight';
-                  // Send key press with movement speed based on delta
-                  this.ws.send(JSON.stringify({ 
-                    type: 'paddle', 
-                    key: direction, 
-                    pressed: true,
-                    speed: Math.min(Math.abs(deltaX) * 0.5, 5) // Limit max speed
-                  }));
-                  // Send key release for opposite direction
-                  const oppositeDirection = direction === 'ArrowLeft' ? 'ArrowRight' : 'ArrowLeft';
-                  this.ws.send(JSON.stringify({ type: 'paddle', key: oppositeDirection, pressed: false }));
+                // Calculate relative movement
+                const deltaX = touchX - (lastTouchX || touchX);
+                // Send key press/release based on movement direction
+                if (deltaX < 0) {
+                  this.ws.send(JSON.stringify({ type: 'paddle', key: 'ArrowLeft', pressed: true }));
+                  this.ws.send(JSON.stringify({ type: 'paddle', key: 'ArrowRight', pressed: false }));
+                } else if (deltaX > 0) {
+                  this.ws.send(JSON.stringify({ type: 'paddle', key: 'ArrowRight', pressed: true }));
+                  this.ws.send(JSON.stringify({ type: 'paddle', key: 'ArrowLeft', pressed: false }));
                 }
               }
             }
@@ -218,10 +205,16 @@ export class MultiplayerSpaceBattle {
         }
       }, { passive: false });
       this.canvas.addEventListener('touchend', () => {
-        // Send key release for both directions when touch ends
-        if (!this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.ws.send(JSON.stringify({ type: 'paddle', key: 'ArrowLeft', pressed: false }));
-          this.ws.send(JSON.stringify({ type: 'paddle', key: 'ArrowRight', pressed: false }));
+        if (this.isHost) {
+          // Reset host key states
+          this.keys.a = false;
+          this.keys.d = false;
+        } else {
+          // Send key release for both directions when touch ends
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'paddle', key: 'ArrowLeft', pressed: false }));
+            this.ws.send(JSON.stringify({ type: 'paddle', key: 'ArrowRight', pressed: false }));
+          }
         }
         lastTouchX = null;
         lastTouchY = null;
@@ -242,10 +235,8 @@ export class MultiplayerSpaceBattle {
       // Only process ArrowLeft/ArrowRight keys from guest
       if (msg.key === "ArrowLeft" || msg.key === "ArrowRight") {
         this.keys[msg.key as keyof typeof this.keys] = msg.pressed;
-        // Store the speed if provided
-        if (msg.speed) {
-          this.spaceshipSpeed = msg.speed * this.scale;
-        }
+        // Always use a consistent speed for guest movement
+        this.spaceshipSpeed = 5 * this.scale;
       }
     }
   }
@@ -398,25 +389,25 @@ export class MultiplayerSpaceBattle {
     const frameTime = 1 / 60;
     const deltaTimeFactor = deltaTime / frameTime;
 
-    // Reset keys if no key events for a while (prevents stuck keys)
-    if (timestamp - this.lastKeyEventTime > this.KEY_RESET_INTERVAL) {
-      this.resetKeys();
+    // Move spaceships with consistent speed
+    const spaceshipSpeed = 5 * this.scale * deltaTimeFactor;
+    
+    // Host movement (left spaceship)
+    if (this.isHost) {
+      if (this.keys.a && this.leftSpaceship.x - this.leftSpaceship.width / 2 > 0) {
+        this.leftSpaceship.x -= spaceshipSpeed;
+      }
+      if (this.keys.d && this.leftSpaceship.x + this.leftSpaceship.width / 2 < this.canvas.width / 2) {
+        this.leftSpaceship.x += spaceshipSpeed;
+      }
     }
-
-    // Move spaceships
-    const hostSpaceshipSpeed = 5 * this.scale * deltaTimeFactor;
-    const guestSpaceshipSpeed = this.spaceshipSpeed || hostSpaceshipSpeed;
-    if (this.keys.a && this.leftSpaceship.x - this.leftSpaceship.width / 2 > 0) {
-      this.leftSpaceship.x -= hostSpaceshipSpeed;
-    }
-    if (this.keys.d && this.leftSpaceship.x + this.leftSpaceship.width / 2 < this.canvas.width / 2) {
-      this.leftSpaceship.x += hostSpaceshipSpeed;
-    }
+    
+    // Guest movement (right spaceship)
     if (this.keys.ArrowLeft && this.rightSpaceship.x - this.rightSpaceship.width / 2 > this.canvas.width / 2) {
-      this.rightSpaceship.x -= guestSpaceshipSpeed;
+      this.rightSpaceship.x -= spaceshipSpeed;
     }
     if (this.keys.ArrowRight && this.rightSpaceship.x + this.rightSpaceship.width / 2 < this.canvas.width) {
-      this.rightSpaceship.x += guestSpaceshipSpeed;
+      this.rightSpaceship.x += spaceshipSpeed;
     }
 
     // --- Timers are now time-based ---
@@ -730,7 +721,6 @@ export class MultiplayerSpaceBattle {
         this.isPaused = !this.isPaused;
       }
       if (["a", "d", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        this.lastKeyEventTime = performance.now();
         // Host can only use A/D keys
         if (this.isHost && (e.key === "a" || e.key === "d")) {
           this.keys[e.key as "a" | "d" | "ArrowLeft" | "ArrowRight"] = true;
@@ -746,7 +736,6 @@ export class MultiplayerSpaceBattle {
 
     document.addEventListener("keyup", (e) => {
       if (["a", "d", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        this.lastKeyEventTime = performance.now();
         // Host can only use A/D keys
         if (this.isHost && (e.key === "a" || e.key === "d")) {
           this.keys[e.key as "a" | "d" | "ArrowLeft" | "ArrowRight"] = false;
@@ -760,22 +749,8 @@ export class MultiplayerSpaceBattle {
       }
     });
 
-    // Add window blur handler to reset keys when window loses focus
-    window.addEventListener("blur", () => {
-      this.resetKeys();
-    });
-
     // Resize handler
     window.addEventListener("resize", () => this.resizeCanvas());
-  }
-
-  private resetKeys(): void {
-    this.keys = {
-      a: false,
-      d: false,
-      ArrowLeft: false,
-      ArrowRight: false,
-    };
   }
 
   public cleanup(): void {
