@@ -29,8 +29,8 @@ services:
       - PORT=${PORT}
       - DB_PATH=${DB_PATH}
       - BCRYPT_SALT_ROUNDS=${BCRYPT_SALT_ROUNDS}
-    # volumes:
-    #   - /goinfre:/goinfre # Uncomment this at school to map /goinfre or /sgoinfre as required by the subject (Page 6)
+    volumes:
+      - /goinfre:/goinfre # Mount goinfre directory for database persistence
     restart: unless-stopped
 
 networks:
