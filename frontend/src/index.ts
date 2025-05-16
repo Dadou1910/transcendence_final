@@ -622,7 +622,8 @@ async function handleGameRoute(): Promise<string> {
               },
               () => {
                 router.navigate("/");
-              }
+              },
+              navigate
             );
           }, 0);
           return html;

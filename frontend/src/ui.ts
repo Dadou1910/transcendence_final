@@ -737,14 +737,14 @@ export function renderTournamentEnd(winnerName: string): string {
 }
 
 // Sets up event listeners for the tournament end screen buttons
-export function setupTournamentEnd(onStartAgain: () => void, onBack: () => void) {
+export function setupTournamentEnd(onStartAgain: () => void, onBack: () => void, navigate: (path: string) => void) {
   const backToMenuButton = document.getElementById("backToMenuButton") as HTMLButtonElement;
 
   // Attach back button listener
   if (backToMenuButton) {
     backToMenuButton.addEventListener("click", (e) => {
       e.preventDefault();
-      onBack();
+      navigate("/");
     });
   } else {
     console.error("Back to Menu button not found!");
