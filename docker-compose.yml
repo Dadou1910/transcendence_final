@@ -19,14 +19,9 @@ services:
   backend:
     build:
       context: ./backend
-    # Port 4000 is no longer exposed to the host, 
-    # as Nginx in the frontend service will proxy requests to it over the internal Docker network.
-    # ports:
-    #   - "4000:4000"
     networks:
       - app-network
     environment:
-      - PORT=${PORT}
       - DB_PATH=${DB_PATH}
       - BCRYPT_SALT_ROUNDS=${BCRYPT_SALT_ROUNDS}
     volumes:

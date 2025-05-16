@@ -80,6 +80,7 @@ export class MultiplayerSpaceBattle {
   };
   public gameLoopRunning: boolean = false;
   public spaceshipSpeed: number | null = null;
+  public hasTriggeredGameEnd: boolean = false;
 
   constructor(
     playerLeftName: string,
@@ -244,6 +245,8 @@ export class MultiplayerSpaceBattle {
         if (msg.speed) {
           this.spaceshipSpeed = msg.speed * this.scale;
         }
+        // Log key state changes for debugging
+        console.log(`[DEBUG] Key state updated: ${msg.key} = ${msg.pressed}`);
       }
     }
   }
@@ -341,6 +344,13 @@ export class MultiplayerSpaceBattle {
   public startGameLoop() {
     const loop = (timestamp: number) => {
       if (!this.gameStarted || this.gameOver) {
+        // Reset key states when game is not active
+        this.keys = {
+          a: false,
+          d: false,
+          ArrowLeft: false,
+          ArrowRight: false,
+        };
         return;
       }
       this.updateGameState(timestamp);
@@ -512,24 +522,38 @@ export class MultiplayerSpaceBattle {
     });
   }
 
-  private handleGameOver(winnerName: string): void {
-    if (this.gameOver) return; // Prevent multiple calls
-    this.gameOver = true;
-    this.targets = [];
-    this.projectiles = [];
-    this.restartButton.style.display = "none";
-    
-    // Only attempt to record match if we're the host
-    if (this.isHost) {
-      this.statsManager.recordMatch(winnerName, winnerName === this.playerLeftName ? this.playerRightName : this.playerLeftName, "Online Space Battle", {
-        player1Score: this.scoreLeft,
-        player2Score: this.scoreRight,
-        sessionToken: localStorage.getItem("sessionToken")
-      });
-    }
-    
-    if (this.onGameEnd) {
-      this.onGameEnd(winnerName);
+  public handleGameOver(winnerName: string): void {
+    if (!this.hasTriggeredGameEnd) {
+      this.hasTriggeredGameEnd = true;
+      this.gameOver = true;
+      this.gameStarted = false;
+      this.targets = [];
+      this.projectiles = [];
+      this.restartButton.style.display = "none";
+      
+      // Reset all key states
+      this.keys = {
+        a: false,
+        d: false,
+        ArrowLeft: false,
+        ArrowRight: false,
+      };
+      
+      // Log game over state
+      console.log(`[DEBUG] Game over. Winner: ${winnerName}`);
+      
+      // Only attempt to record match if we're the host
+      if (this.isHost) {
+        this.statsManager.recordMatch(winnerName, winnerName === this.playerLeftName ? this.playerRightName : this.playerLeftName, "Online Space Battle", {
+          player1Score: this.scoreLeft,
+          player2Score: this.scoreRight,
+          sessionToken: localStorage.getItem("sessionToken")
+        });
+      }
+      
+      if (this.onGameEnd) {
+        this.onGameEnd(winnerName);
+      }
     }
   }
 
@@ -628,6 +652,47 @@ export class MultiplayerSpaceBattle {
     return parseInt(this.speedSlider.value) / 5;
   }
 
+  private handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === " " && this.gameStarted) {
+      this.isPaused = !this.isPaused;
+    }
+    if (["a", "d", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      // Host can only use A/D keys
+      if (this.isHost && (e.key === "a" || e.key === "d")) {
+        this.keys[e.key as "a" | "d" | "ArrowLeft" | "ArrowRight"] = true;
+        // Log key state changes for debugging
+        console.log(`[DEBUG] Key pressed: ${e.key}`);
+      }
+      // Guest can only use ArrowLeft/ArrowRight keys
+      else if (!this.isHost && (e.key === "ArrowLeft" || e.key === "ArrowRight") && !this.gameOver) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: true }));
+          // Log WebSocket message for debugging
+          console.log(`[DEBUG] Sent WebSocket message: paddle ${e.key} pressed`);
+        }
+      }
+    }
+  };
+
+  private handleKeyUp = (e: KeyboardEvent) => {
+    if (["a", "d", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      // Host can only use A/D keys
+      if (this.isHost && (e.key === "a" || e.key === "d")) {
+        this.keys[e.key as "a" | "d" | "ArrowLeft" | "ArrowRight"] = false;
+        // Log key state changes for debugging
+        console.log(`[DEBUG] Key released: ${e.key}`);
+      }
+      // Guest can only use ArrowLeft/ArrowRight keys
+      else if (!this.isHost && (e.key === "ArrowLeft" || e.key === "ArrowRight") && !this.gameOver) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: false }));
+          // Log WebSocket message for debugging
+          console.log(`[DEBUG] Sent WebSocket message: paddle ${e.key} released`);
+        }
+      }
+    }
+  };
+
   private setupEventListeners(): void {
     // Speed slider
     this.speedSlider.addEventListener("input", () => {
@@ -718,57 +783,31 @@ export class MultiplayerSpaceBattle {
     });
 
     // Keyboard controls (movement only)
-    document.addEventListener("keydown", (e) => {
-      if (e.key === " " && this.gameStarted) {
-        this.isPaused = !this.isPaused;
-      }
-      if (["a", "d", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        // Host can only use A/D keys
-        if (this.isHost && (e.key === "a" || e.key === "d")) {
-          this.keys[e.key as "a" | "d" | "ArrowLeft" | "ArrowRight"] = true;
-        }
-        // Guest can only use ArrowLeft/ArrowRight keys
-        else if (!this.isHost && (e.key === "ArrowLeft" || e.key === "ArrowRight") && !this.gameOver) {
-          if (this.ws) {
-            this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: true }));
-          }
-        }
-      }
-    });
-
-    document.addEventListener("keyup", (e) => {
-      if (["a", "d", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        // Host can only use A/D keys
-        if (this.isHost && (e.key === "a" || e.key === "d")) {
-          this.keys[e.key as "a" | "d" | "ArrowLeft" | "ArrowRight"] = false;
-        }
-        // Guest can only use ArrowLeft/ArrowRight keys
-        else if (!this.isHost && (e.key === "ArrowLeft" || e.key === "ArrowRight") && !this.gameOver) {
-          if (this.ws) {
-            this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: false }));
-          }
-        }
-      }
-    });
+    document.addEventListener("keydown", this.handleKeyDown);
+    document.addEventListener("keyup", this.handleKeyUp);
 
     // Resize handler
     window.addEventListener("resize", () => this.resizeCanvas());
   }
 
   public cleanup(): void {
+    // Remove event listeners
+    document.removeEventListener("keydown", this.handleKeyDown);
+    document.removeEventListener("keyup", this.handleKeyUp);
+    
     // Send cleanup message to both players
     if (this.ws) {
-        this.ws.send(JSON.stringify({ type: "cleanup" }));
+      this.ws.send(JSON.stringify({ type: "cleanup" }));
     }
     if (this.ws) {
-        this.ws.close();
+      this.ws.close();
     }
     window.removeEventListener("resize", () => this.resizeCanvas());
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
     }
     if (this.gameLoopRunning) {
-        console.log('========== DEBUG: GAME LOOP STOPPED FROM CLEANUP() ==========');
+      console.log('========== DEBUG: GAME LOOP STOPPED FROM CLEANUP() ==========');
     }
     this.gameLoopRunning = false;
     // Re-establish presence connection
